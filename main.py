@@ -12,6 +12,23 @@ load_dotenv()
 PORT = int(os.environ.get("PORT", 8080))
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "badrennakkach1@gmail.com")
 FINANCE_AGENT_URL = os.environ.get("FINANCE_AGENT_URL", "https://volvere-finance-agent-production.up.railway.app")
+ENTREPRENEUR_URL = os.environ.get("ENTREPRENEUR_URL", "")
+EMAIL_AGENT_URL = os.environ.get("EMAIL_AGENT_URL", "")
+SALES_AGENT_URL = os.environ.get("SALES_AGENT_URL", "")
+MARKETING_URL = os.environ.get("MARKETING_URL", "https://volvere-marketing-agent-production.up.railway.app")
+GTM_URL = os.environ.get("GTM_URL", "https://web-production-75ae7.up.railway.app")
+
+
+def _fetch_finance_stats() -> dict:
+    """Pull real live stats from the finance agent."""
+    try:
+        import requests
+        r = requests.get(f"{FINANCE_AGENT_URL}/stats", timeout=5)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
 
 app = FastAPI(title="Volvere.io")
 
@@ -185,7 +202,7 @@ async def landing(request: Request, token: str = Cookie(default=None), msg: str 
 
 <!-- HERO -->
 <section class="hero">
-  <div class="badge"><span class="badge-dot"></span> Now in Early Access · {wl_count + 47} people waiting</div>
+  <div class="badge"><span class="badge-dot"></span> Now in Early Access · {wl_count} people waiting</div>
   <h1>Your AI Business Team.<br><span>Always On.</span></h1>
   <p class="hero-sub">A complete suite of AI agents — financial analyst, entrepreneur advisor, sales intelligence & automated outreach — running 24/7 so you don't have to.</p>
   <div class="hero-btns">
@@ -333,7 +350,7 @@ async def landing(request: Request, token: str = Cookie(default=None), msg: str 
   <div class="wl-box">
     <div style="font-size:40px;margin-bottom:16px">🚀</div>
     <h2>Get early access.</h2>
-    <p style="color:var(--m2);font-size:15px;margin-top:8px;line-height:1.6">Join {wl_count + 47} founders and investors waiting for launch. Early members get Pro free for 3 months.</p>
+    <p style="color:var(--m2);font-size:15px;margin-top:8px;line-height:1.6">Join {wl_count} founders and investors waiting for launch. Early members get Pro free for 3 months.</p>
     <form action="/waitlist" method="post">
       <div class="wl-form">
         <input class="wl-input" type="text" name="name" placeholder="Your name" required/>
@@ -475,38 +492,63 @@ async def dashboard(token: str = Cookie(default=None)):
     wl_count = get_waitlist_count()
     users_count = get_users_count()
 
+    # Real live stats from finance agent
+    finance_stats = _fetch_finance_stats()
+    fin_total = finance_stats.get("total", "—")
+    fin_buys = finance_stats.get("buys", "—")
+    fin_alerts = finance_stats.get("alerts_sent", "—")
+
     agents = [
         {"icon": "🌍", "name": "Financial Intelligence", "desc": "Market signals, BUY/SELL alerts, volume spikes", "url": FINANCE_AGENT_URL, "live": True},
-        {"icon": "🧠", "name": "Entrepreneur Advisor", "desc": "PDF analysis, URL scraping, strategy matrix", "url": "#", "live": True},
-        {"icon": "📧", "name": "Email & Outreach", "desc": "Auto follow-up sequences, Calendly integration", "url": "#", "live": True},
-        {"icon": "💼", "name": "Sales Intelligence", "desc": "Lead scoring 0–100, hot lead Telegram alerts", "url": "#", "live": True},
-        {"icon": "📣", "name": "Marketing Agent", "desc": "SEO, ad copy, content strategy", "url": "#", "live": True},
-        {"icon": "🚀", "name": "GTM Engineer", "desc": "Go-to-market strategy, HubSpot integration", "url": "#", "live": True},
-        {"icon": "🤖", "name": "Crypto Trading Bot", "desc": "LBank & Binance spot trading", "url": "#", "live": False},
+        {"icon": "🧠", "name": "Entrepreneur Advisor", "desc": "PDF analysis, URL scraping, strategy matrix", "url": ENTREPRENEUR_URL or None, "live": bool(ENTREPRENEUR_URL)},
+        {"icon": "📧", "name": "Email & Outreach", "desc": "Auto follow-up sequences, Calendly integration", "url": EMAIL_AGENT_URL or None, "live": bool(EMAIL_AGENT_URL)},
+        {"icon": "💼", "name": "Sales Intelligence", "desc": "Lead scoring 0–100, hot lead Telegram alerts", "url": SALES_AGENT_URL or None, "live": bool(SALES_AGENT_URL)},
+        {"icon": "📣", "name": "Marketing Agent", "desc": "SEO, ad copy, content strategy", "url": MARKETING_URL or None, "live": bool(MARKETING_URL)},
+        {"icon": "🚀", "name": "GTM Engineer", "desc": "Go-to-market strategy, HubSpot integration", "url": GTM_URL or None, "live": bool(GTM_URL)},
+        {"icon": "🤖", "name": "Crypto Trading Bot", "desc": "LBank & Binance spot trading", "url": None, "live": False},
     ]
+
+    live_count = sum(1 for a in agents if a["live"])
 
     agent_rows = ""
     for a in agents:
         status = '<span class="status-live">● LIVE</span>' if a["live"] else '<span style="color:var(--gold);font-size:11px;font-weight:600">COMING SOON</span>'
-        link_start = f'<a href="{a["url"]}" target="_blank">' if a["url"] != "#" else "<div>"
-        link_end = "</a>" if a["url"] != "#" else "</div>"
-        agent_rows += f"""{link_start}
-        <div class="agent-item">
-          <div class="agent-item-icon">{a['icon']}</div>
-          <div class="agent-item-info">
-            <div class="agent-item-name">{a['name']}</div>
-            <div class="agent-item-desc">{a['desc']}</div>
-          </div>
-          {status}
-        </div>{link_end}"""
+        if a["url"]:
+            agent_rows += f"""<a href="{a['url']}" target="_blank">
+            <div class="agent-item">
+              <div class="agent-item-icon">{a['icon']}</div>
+              <div class="agent-item-info">
+                <div class="agent-item-name">{a['name']}</div>
+                <div class="agent-item-desc">{a['desc']}</div>
+              </div>
+              {status}
+            </div></a>"""
+        else:
+            agent_rows += f"""<div class="agent-item" style="opacity:.6;cursor:default">
+              <div class="agent-item-icon">{a['icon']}</div>
+              <div class="agent-item-info">
+                <div class="agent-item-name">{a['name']}</div>
+                <div class="agent-item-desc">{a['desc']}</div>
+              </div>
+              {status}
+            </div>"""
 
     admin_section = ""
     if is_admin:
         waitlist = get_all_waitlist()
-        wl_rows = "".join([f"<tr><td style='padding:8px 12px;font-size:13px'>{w['email']}</td><td style='padding:8px 12px;font-size:13px;color:var(--m2)'>{w.get('name','')}</td><td style='padding:8px 12px;font-size:13px;color:var(--m2)'>{w.get('company','')}</td><td style='padding:8px 12px;font-size:11px;color:var(--m)'>{(w.get('created_at') or '')[:16]}</td></tr>" for w in waitlist])
+        wl_rows = "".join([
+            f"<tr><td style='padding:8px 12px;font-size:13px'>{w['email']}</td>"
+            f"<td style='padding:8px 12px;font-size:13px;color:var(--m2)'>{w.get('name','')}</td>"
+            f"<td style='padding:8px 12px;font-size:13px;color:var(--m2)'>{w.get('company','')}</td>"
+            f"<td style='padding:8px 12px;font-size:11px;color:var(--m)'>{(w.get('created_at') or '')[:16]}</td></tr>"
+            for w in waitlist
+        ])
         admin_section = f"""
         <div style="margin-top:40px">
-          <h3 style="font-size:18px;font-weight:700;margin-bottom:16px">👑 Admin — Waitlist ({wl_count})</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <h3 style="font-size:18px;font-weight:700">👑 Waitlist — {wl_count} signups</h3>
+            <a href="/admin/waitlist.csv" class="btn btn-outline btn-sm">⬇ Export CSV</a>
+          </div>
           <div style="background:var(--s);border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="background:var(--b)">
@@ -520,6 +562,21 @@ async def dashboard(token: str = Cookie(default=None)):
           </div>
         </div>"""
 
+    sidebar_links = [
+        ("⚡", "Dashboard", "/dashboard"),
+        ("🌍", "Finance Agent", FINANCE_AGENT_URL),
+        ("🧠", "Entrepreneur", ENTREPRENEUR_URL or "/dashboard"),
+        ("📧", "Email Agent", EMAIL_AGENT_URL or "/dashboard"),
+        ("💼", "Sales Agent", SALES_AGENT_URL or "/dashboard"),
+        ("📣", "Marketing", MARKETING_URL or "/dashboard"),
+        ("🚀", "GTM Agent", GTM_URL or "/dashboard"),
+    ]
+    sidebar_html = "".join([
+        f'<a href="{url}" {"target=\"_blank\"" if url.startswith("http") and url != "/dashboard" else ""}>'
+        f'<div class="sidebar-item{"  active" if url == "/dashboard" else ""}"><span class="sidebar-icon">{icon}</span> {label}</div></a>'
+        for icon, label, url in sidebar_links
+    ])
+
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Dashboard — Volvere.io</title><style>{CSS}</style></head>
@@ -527,37 +584,39 @@ async def dashboard(token: str = Cookie(default=None)):
 {_nav(user)}
 <div class="dash-layout">
   <div class="sidebar">
-    <a href="/dashboard"><div class="sidebar-item active"><span class="sidebar-icon">⚡</span> Dashboard</div></a>
-    <a href="{FINANCE_AGENT_URL}" target="_blank"><div class="sidebar-item"><span class="sidebar-icon">🌍</span> Finance Agent</div></a>
-    <a href="/dashboard"><div class="sidebar-item"><span class="sidebar-icon">🧠</span> Entrepreneur</div></a>
-    <a href="/dashboard"><div class="sidebar-item"><span class="sidebar-icon">📧</span> Email Agent</div></a>
-    <a href="/dashboard"><div class="sidebar-item"><span class="sidebar-icon">💼</span> Sales Agent</div></a>
-    <a href="/dashboard"><div class="sidebar-item"><span class="sidebar-icon">📣</span> Marketing</div></a>
-    <a href="/dashboard"><div class="sidebar-item"><span class="sidebar-icon">🚀</span> GTM Agent</div></a>
+    {sidebar_html}
     <div style="border-top:1px solid var(--b);margin:16px 0"></div>
     <a href="/logout"><div class="sidebar-item"><span class="sidebar-icon">🚪</span> Log out</div></a>
   </div>
   <div class="dash-main">
     <div class="dash-header">
       <div class="dash-title">Good day, {name} 👋</div>
-      <div class="dash-sub">Your AI business team is running 24/7. Here's your overview.</div>
+      <div class="dash-sub">Your AI business team is running 24/7. Here's your live overview.</div>
     </div>
     <div class="dash-grid">
       <div class="dash-card">
-        <div class="dash-card-val" style="color:var(--green)">7</div>
-        <div class="dash-card-lbl">Active Agents</div>
+        <div class="dash-card-val" style="color:var(--green)">{live_count}</div>
+        <div class="dash-card-lbl">Live Agents</div>
       </div>
       <div class="dash-card">
-        <div class="dash-card-val" style="color:var(--p2)">24/7</div>
-        <div class="dash-card-lbl">Monitoring</div>
+        <div class="dash-card-val" style="color:var(--p2)">{fin_total}</div>
+        <div class="dash-card-lbl">Signals Analyzed</div>
       </div>
       <div class="dash-card">
-        <div class="dash-card-val" style="color:var(--gold)">{wl_count + 47}</div>
-        <div class="dash-card-lbl">Waitlist Members</div>
+        <div class="dash-card-val" style="color:var(--green)">{fin_buys}</div>
+        <div class="dash-card-lbl">BUY Signals</div>
       </div>
       <div class="dash-card">
-        <div class="dash-card-val" style="color:var(--g)">{users_count}</div>
-        <div class="dash-card-lbl">Platform Users</div>
+        <div class="dash-card-val" style="color:var(--gold)">{fin_alerts}</div>
+        <div class="dash-card-lbl">Telegram Alerts</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-val" style="color:var(--g)">{wl_count}</div>
+        <div class="dash-card-lbl">Waitlist</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-val" style="color:var(--m2)">{users_count}</div>
+        <div class="dash-card-lbl">Users</div>
       </div>
     </div>
     <h3 style="font-size:18px;font-weight:700;margin-bottom:16px">Your Agents</h3>
@@ -566,6 +625,20 @@ async def dashboard(token: str = Cookie(default=None)):
   </div>
 </div>
 </body></html>"""
+
+
+from fastapi.responses import PlainTextResponse
+
+@app.get("/admin/waitlist.csv", response_class=PlainTextResponse)
+async def export_waitlist(token: str = Cookie(default=None)):
+    user = _current_user(token)
+    if not user or not (user.get("is_admin") or user.get("is_admin") == 1):
+        return RedirectResponse("/login")
+    rows = get_all_waitlist()
+    lines = ["email,name,company,joined"]
+    for w in rows:
+        lines.append(f"{w['email']},{w.get('name','')},{w.get('company','')},{(w.get('created_at') or '')[:16]}")
+    return PlainTextResponse("\n".join(lines), headers={"Content-Disposition": "attachment; filename=waitlist.csv"})
 
 
 @app.get("/health")
